@@ -12,7 +12,7 @@ printf '\nRemoving Shotcaller\n\n'
 
 launchctl bootout "gui/$(id -u)/com.strider.shotcaller" 2>/dev/null || \
     launchctl unload -w "$AGENT" 2>/dev/null || true
-pkill -f "Shotcaller.app/Contents/MacOS" 2>/dev/null || true
+pkill -f "$APP/Contents/MacOS/" 2>/dev/null || true
 
 rm -f "$AGENT"
 rm -rf "$APP"
