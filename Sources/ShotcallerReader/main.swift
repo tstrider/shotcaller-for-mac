@@ -182,7 +182,7 @@ let chrome: Set<String> = [
 ]
 
 func isJunk(_ t: String) -> Bool {
-    if t.count < 4 || t.count > 90 { return true }
+    if t.count < 4 || t.count > 70 { return true }   // long lines are body text
     if chrome.contains(t.lowercased()) { return true }
     // A row of menu titles reaches the recogniser as one line, so "File Edit View
     // Window Help" arrives as a single candidate.
