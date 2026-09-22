@@ -1,21 +1,25 @@
 # Shotcaller for Mac
 
-**by Strider**
+**Automatically renames your screenshots based on what's in them, so you can find them later.**
 
-Your screenshots are all called `Screenshot 2026-09-21 at 3.45.12 PM.png`. Six months later
-you cannot find a single one of them.
+Every screenshot you take gets the same useless name: `Screenshot 2026-09-21 at 3.45.12 PM.png`.
+Six months later, you can't find the one you need.
 
-Shotcaller reads the words in each new screenshot and renames the file after whatever the
-picture is actually about.
+Shotcaller reads the text in each new screenshot and uses it to name the file.
 
 ```
 Screenshot 2026-09-21 at 3.45.12 PM.png   ->   Order shipped and on its way 2026-09-21.png
 Screenshot 2026-09-21 at 4.02.55 PM.png   ->   Monthly savings plan 2026-09-21.png
-Screenshot 2026-09-21 at 4.20.11 PM.png   ->   left alone, nothing readable in it
+Screenshot 2026-09-21 at 4.20.11 PM.png   ->   (no readable text, name left as is)
 ```
 
-It runs quietly in the background. No window, no menu bar icon, no account, no settings to
-learn. You take a screenshot and a few seconds later the file has a name you can search for.
+Install it once and forget it. No window, no menu bar icon, no account, no settings. Take a
+screenshot, and a few seconds later it has a name Spotlight can find.
+
+Free, open source, and everything happens on your Mac. Built for people with too many
+screenshots.
+
+*by Strider*
 
 ---
 
