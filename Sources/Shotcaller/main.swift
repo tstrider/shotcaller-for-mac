@@ -348,10 +348,20 @@ func pass() {
     } catch {
         // The folder was deleted or moved away in the Finder: make it again, the way
         // macOS would, rather than blaming permissions.
-        if !fm.fileExists(atPath: watchDir.path) {
-            log("MISSING \(watchDir.path) is gone, so it has been made again")
-            try? fm.createDirectory(at: watchDir, withIntermediateDirectories: true)
+        // Only when the folder around it is still there: a folder on a drive that is
+        // unplugged is left for when the drive comes back.
+        let parent = watchDir.deletingLastPathComponent().path
+        if !fm.fileExists(atPath: watchDir.path), fm.fileExists(atPath: parent),
+           (try? fm.createDirectory(at: watchDir, withIntermediateDirectories: false)) != nil {
+            log("MISSING \(watchDir.path) was gone, so it has been made again")
             watchFolderForChanges()
+            return
+        }
+        if !fm.fileExists(atPath: watchDir.path) {
+            if !deniedLogged {
+                log("MISSING \(watchDir.path) cannot be found. Is its drive plugged in?")
+                deniedLogged = true
+            }
             return
         }
         if !deniedLogged {
@@ -388,7 +398,10 @@ func pass() {
         // moves them in whole, but a copied or synced file arrives a piece at a time.
         let isVideo = videoTypes.contains((name as NSString).pathExtension.lowercased())
         let modified = attrs[.modificationDate] as? Date ?? now
-        if sizeSeen[name] != size || now.timeIntervalSince(modified) < (isVideo ? 5 : 2) {
+        // A date in the future (a synced file from a Mac whose clock runs ahead)
+        // must not keep the file waiting forever.
+        let age = now.timeIntervalSince(modified)
+        if sizeSeen[name] != size || (age >= 0 && age < (isVideo ? 5 : 2)) {
             sizeSeen[name] = size
             lookAgainSoon = true
             continue

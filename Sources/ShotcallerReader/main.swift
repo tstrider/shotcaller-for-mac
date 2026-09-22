@@ -218,7 +218,8 @@ func biggestLine(_ lines: [Line]) -> String? {
     if title.count < 26, scored.count > 1 {
         let second = scored[1].line
         let sameSize = second.height > top.line.height * 0.75 && second.height < top.line.height * 1.33
-        if sameSize, abs(top.line.y - second.y) < 0.08 {
+        let menuBar = second.y > 0.94 && second.height < 0.035
+        if sameSize, !menuBar, abs(top.line.y - second.y) < 0.08 {
             title = second.y > top.line.y ? second.text + " " + title : title + " " + second.text
         }
     }

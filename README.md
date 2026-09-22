@@ -48,10 +48,10 @@ To remove it:
 ### Requirements
 
 - macOS 13 or newer, Apple silicon or Intel
-- For the best names: a Mac with Apple Intelligence switched on (System Settings, Apple
-  Intelligence and Siri). macOS 27 lets the model see the picture itself; macOS 26 gives it
-  the text only. Without Apple Intelligence, Shotcaller still works and names each file
-  after its biggest line of text.
+- For the best names: macOS 26 or later on Apple silicon, with Apple Intelligence switched on
+  (System Settings, Apple Intelligence and Siri). macOS 27 lets the model see the picture
+  itself; macOS 26 gives it the text only. On Intel, on macOS 13 to 15, or with Apple
+  Intelligence off, Shotcaller still works and names each file after its biggest line of text.
 - Xcode Command Line Tools, for the Swift compiler. If you do not have them, `install.sh`
   stops and tells you to run `xcode-select --install` first.
 
@@ -92,9 +92,12 @@ file extensions read off the screen, no SHOUTING, and never longer than about 60
   `Cancel`, `Done` never wins, so the macOS menu bar cannot become your filename.
 - **Junk is filtered.** Clocks, page numbers, prices, and lines that are mostly digits.
 
-**5. If nothing useful comes back, the file is left alone.** Shotcaller looks again later, up
-to three times, then an empty window keeps the name macOS gave it. It would rather do nothing
-than give you a bad name.
+**5. If nothing useful comes back, the file is left alone.** A shot with no readable words at
+all, such as a photo or an empty window, keeps the name macOS gave it, because the model would
+only invent one. Otherwise Shotcaller tries three times in all, ten minutes apart, before
+giving up. It would rather do nothing than give you a bad name.
+
+Recordings are named from a frame about 30% of the way in, never later than 20 seconds.
 
 ---
 
@@ -166,7 +169,7 @@ Shotcaller never deletes a file.
 tail -20 ~/Library/Application\ Support/Shotcaller/shotcaller.log
 ```
 
-A line starting `DENIED` means macOS has not granted folder access. Open System Settings,
+A line containing `DENIED` means macOS has not granted folder access. Open System Settings,
 Privacy and Security, Files and Folders, and switch Shotcaller on.
 
 **It asked for permission again after I updated.** Expected. The app is signed locally, and a
@@ -181,6 +184,12 @@ by hand.
 
 ```bash
 launchctl bootout gui/$(id -u)/com.strider.shotcaller
+```
+
+It comes back at the next login. To start it again sooner:
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.strider.shotcaller.plist
 ```
 
 ---

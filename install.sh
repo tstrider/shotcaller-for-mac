@@ -14,7 +14,8 @@ say() { printf '  %s\n' "$*"; }
 printf '\nShotcaller\n\n'
 
 # 1. Check the compiler is there.
-if ! command -v swiftc >/dev/null 2>&1; then
+# /usr/bin/swiftc exists on every Mac as a stub, so ask for the tools themselves.
+if ! xcode-select -p >/dev/null 2>&1; then
     printf 'Swift is not installed.\n\n'
     printf 'Run this, click through the installer, then run this script again:\n\n'
     printf '    xcode-select --install\n\n'
