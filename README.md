@@ -9,10 +9,10 @@ Shotcaller looks at each new screenshot, works out what it shows, and names the 
 Screen recordings too.
 
 ```
-Screenshot 2026-09-21 at 3.45.12 PM.png   ->   Discord gaming discussion thread 2026-09-21.png
-Screenshot 2026-09-22 at 7.24.43 AM.png   ->   Video player configuration error YouTube 2026-09-22.png
-Screenshot 2026-09-22 at 5.54.52 AM.png   ->   Last Epoch Season 6 promotion post 2026-09-22.png
-Screen Recording 2026-09-21 at 10.23.10 PM.mov   ->   Setting up audio for OBS 2026-09-21.mov
+Screenshot 2026-09-21 at 10.31.54 PM.png   ->   Discord chat about Spider-Man 2 2026-09-21.png
+Screenshot 2026-09-22 at 10.35.00 AM.png   ->   Reddit application creation form 2026-09-22.png
+Screenshot 2026-09-22 at 4.23.14 PM.png    ->   Frog meme about PC cleaning 2026-09-22.png
+Screen Recording 2026-09-21 at 10.23.10 PM.mov   ->   OBS tutorial 2026-09-21.mov
 ```
 
 Install it once and forget it. No window, no menu bar icon, no account, no settings. Take a
@@ -77,8 +77,8 @@ Text. Nothing is uploaded.
 **4. It works out what the screenshot is about.** Apple's on-device language model, the one
 behind Apple Intelligence, looks at the picture together with that text and writes a title of
 3 to 7 words: the app or site when it is plainly visible, then the subject. A Discord chat
-with a Settings window behind it becomes `Discord gaming discussion thread`, not the biggest
-word on screen. Only the on-device model is ever used; Shotcaller never calls Apple's cloud one.
+with a Settings window behind it becomes `Discord chat about Spider-Man 2`, not the biggest
+word on screen (`4 Energy`, from the Settings sidebar). Only the on-device model is ever used; Shotcaller never calls Apple's cloud one.
 
 The title is then cleaned up for the Finder: no slashes, colons, emoji or stray symbols, no
 file extensions read off the screen, no SHOUTING, and never longer than about 60 characters.
