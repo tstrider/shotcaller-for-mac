@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Shotcaller</string>
+    <key>CFBundleDisplayName</key>
+    <string>Shotcaller</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.strider.shotcaller</string>
+    <key>CFBundleExecutable</key>
+    <string>Shotcaller</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+
+    <!-- No Dock icon and no menu bar. Shotcaller has no interface, it just works. -->
+    <key>LSUIElement</key>
+    <true/>
+
+    <!-- Shown in the macOS box that asks whether Shotcaller may read the folder. -->
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Shotcaller renames new screenshots after the text inside them.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Shotcaller renames new screenshots after the text inside them.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Shotcaller renames new screenshots after the text inside them.</string>
+</dict>
+</plist>

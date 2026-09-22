@@ -1,0 +1,12 @@
+# Build output
+build/
+*.app/
+*.o
+*.dSYM/
+
+# Anything the tool produces at runtime. The log lists what your screenshots were
+# about, so it must never reach a repository.
+*.log
+config.json
+
+.DS_Store
