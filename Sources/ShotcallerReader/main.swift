@@ -12,9 +12,10 @@
 //
 // 1. Apple's text recogniser reads every line in the picture.
 // 2. If Apple Intelligence is on, Apple's on-device language model looks at the
-//    picture itself together with that text, and writes a title that says what the
-//    shot is about ("Discord chat about Destiny lore"). The model runs on this Mac.
-//    Shotcaller only ever uses the on-device model, never Apple's cloud one.
+//    picture itself together with that text, says in a sentence what the whole shot
+//    shows, and then writes a title from that ("Discord chat about Destiny lore").
+//    A photo with no words in it is named from the picture alone. The model runs on
+//    this Mac. Shotcaller only ever uses the on-device model, never Apple's cloud one.
 // 3. If the model is off, unavailable, or declines, the biggest line of text wins,
 //    as it always did.
 //
@@ -140,17 +141,16 @@ func tidy(_ raw: String) -> String? {
         if let first = t.first { t = first.uppercased() + t.dropFirst() }
     }
 
-    // At most ten words, never ending on a word that leaves the title hanging.
+    // At most ten words, never ending on a word that leaves the title hanging. A model
+    // sometimes stops short too ("Three tweets with").
     var words = t.split(separator: " ").map(String.init)
-    if words.count > 10 {
-        words = Array(words.prefix(10))
-        let hanging: Set<String> = ["a", "an", "the", "of", "and", "or", "for", "with", "to",
-                                    "in", "on", "at", "by", "about", "from", "&", "+", "-"]
-        while words.count > 3, let last = words.last, hanging.contains(last.lowercased()) {
-            words.removeLast()
-        }
-        t = words.joined(separator: " ")
+    let hanging: Set<String> = ["a", "an", "the", "of", "and", "or", "for", "with", "to",
+                                "in", "on", "at", "by", "about", "from", "&", "+", "-"]
+    words = Array(words.prefix(10))
+    while words.count > 2, let last = words.last, hanging.contains(last.lowercased()) {
+        words.removeLast()
     }
+    t = words.joined(separator: " ")
 
     // Short enough to read in the Finder, cut on a word boundary. The byte limit keeps
     // room for the date and a counter inside the 255 byte limit on a filename.
@@ -228,6 +228,7 @@ func biggestLine(_ lines: [Line]) -> String? {
 
 // MARK: - the new way: Apple's on-device model
 
+/// For a model that can only read the text (macOS 26).
 let instructions = """
 You name screenshot files so that people can find them again months later.
 You are shown a screenshot and the text that was read from it, largest text first.
@@ -248,11 +249,120 @@ Q3 revenue by region spreadsheet
 Xcode build error missing module
 """
 
+/// For a model that can see the picture (macOS 27). It first says what the whole shot
+/// shows, and only then writes the title. That keeps a small model from naming the
+/// file after whichever line of text stands out: a book title on a spine, the first
+/// item of a list, one advert in a feed.
+let seeingInstructions = """
+You name screenshot files so that people can find them again months later.
+You are shown a screenshot and the text read from it.
+First say in one sentence what the screenshot shows as a whole. Then write a title \
+of 2 to 7 words.
+Look at the picture first. The text only helps.
+A good title says what the thing is and what it is about.
+If the picture is mainly a photo of objects, name the objects plainly, and how many \
+if there are a few. Text printed on them, such as book spines, labels or packaging, \
+is not the subject.
+If it shows a home page or feed full of posts, name the app and the page, not one \
+post or ad on it.
+If it is a list, name the whole list, not its first item.
+If it is a chat or conversation, name the app and what the chat is about.
+Ignore ads, menu bars, toolbars, sidebars, bookmarks, the dock and other furniture.
+Name an app or website only when its name is written on screen or its logo is \
+plainly visible. Never guess one from how the screen looks.
+Use specific names from the screenshot where they help. Never invent a category, \
+shape, topic or detail that is not shown.
+Never begin with the word screenshot. No file names, quotation marks, emoji or full stop.
+Examples of good titles:
+Chat about weekend hiking plans
+Amazon order confirmation for headphones
+Blue ceramic mug and saucer
+YouTube home page
+Weekly chores checklist
+Xcode build error missing module
+"""
+
+/// Apps and sites a model tends to name from how a screen looks, rather than from
+/// anything written on it.
+let knownApps: [String] = [
+    "notion", "todoist", "canva", "tiktok", "discord", "slack", "reddit", "youtube",
+    "twitter", "instagram", "facebook", "threads", "mastodon", "bluesky", "linkedin",
+    "whatsapp", "telegram", "signal", "gmail", "outlook", "safari", "chrome", "firefox",
+    "figma", "trello", "asana", "evernote", "goodnotes", "habitica", "steam", "spotify",
+    "netflix", "amazon", "microsoft", "google", "apple notes", "obsidian", "dropbox",
+    "github", "chatgpt", "claude", "codex", "cursor", "vs code", "xcode", "terminal",
+    "photoshop", "excel", "word", "powerpoint", "keynote", "pages", "numbers", "zoom",
+    "teams", "wikipedia", "twitch", "pinterest", "tumblr", "medium", "substack", "etsy",
+    "ebay", "libreoffice", "daydream", "wanderlog", "todo", "to do", "things", "bear", "craft",
+    "messenger", "imessage", "snapchat", "tinder", "uber", "airbnb", "doordash"
+]
+
+/// A capitalised name in a title that appears nowhere on screen is a guess, such as
+/// "Todoist tasks" for a to-do list in some other app. It is dropped when it is a
+/// well-known app, or not an ordinary word at all. Names read off the screen stay.
+@MainActor
+func dropGuessedNames(_ title: String, _ lines: [Line]) -> String {
+    let seen = lines.map(\.text).joined(separator: " ").lowercased()
+    func onScreen(_ word: String) -> Bool {
+        seen.range(of: "\\b" + NSRegularExpression.escapedPattern(for: word.lowercased()),
+                   options: .regularExpression) != nil
+    }
+    var t = title
+    for app in knownApps {
+        guard let r = t.range(of: "\\b\(app)('s)?\\b", options: [.regularExpression, .caseInsensitive]),
+              t[r].first?.isUppercase == true,   // lower case "word" or "pages" is English
+              !onScreen(app) else { continue }
+        t.removeSubrange(r)
+    }
+    let checker = NSSpellChecker.shared
+    var words = t.split(separator: " ").map(String.init)
+    words.removeAll { word in
+        var core = word.trimmingCharacters(in: .punctuationCharacters)
+        if core.hasSuffix("'s") || core.hasSuffix("’s") { core = String(core.dropLast(2)) }
+        guard let first = core.unicodeScalars.first, CharacterSet.uppercaseLetters.contains(first),
+              core.count >= 3, core.unicodeScalars.allSatisfy(CharacterSet.letters.contains),
+              !onScreen(core) else { return false }
+        return checker.checkSpelling(of: core, startingAt: 0).location != NSNotFound
+    }
+    t = words.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " :,-"))
+    if t != title, let first = t.first { t = first.uppercased() + t.dropFirst() }
+    return t
+}
+
+/// A picture with next to nothing in it: one colour, or very nearly.
+func looksBlank(_ image: CGImage) -> Bool {
+    let side = 32
+    var pixels = [UInt8](repeating: 0, count: side * side)
+    let drawn: Bool = pixels.withUnsafeMutableBytes { buffer in
+        guard let context = CGContext(data: buffer.baseAddress, width: side, height: side,
+                                      bitsPerComponent: 8, bytesPerRow: side,
+                                      space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+        return true
+    }
+    guard drawn else { return false }
+    let values = pixels.map(Double.init)
+    let mean = values.reduce(0, +) / Double(values.count)
+    let spread = (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
+    return spread < 6
+}
+
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 @Generable
 struct Named {
     @Guide(description: "A 3 to 7 word title saying what the screenshot is about")
+    var title: String
+}
+
+@available(macOS 26.0, *)
+@Generable
+struct Described {
+    @Guide(description: "One sentence saying what the screenshot shows as a whole: what kind of thing it is, and what it is about")
+    var summary: String
+    @Guide(description: "A 3 to 7 word title for the file, built from the summary")
     var title: String
 }
 
@@ -284,11 +394,20 @@ func verdict(on error: Error) -> Verdict {
 func modelTitle(_ image: CGImage?, _ lines: [Line]) async -> String? {
     let model = SystemLanguageModel.default   // on-device, never the cloud model
     guard model.isAvailable else { return nil }
-    // With no text at all, the model invents a subject ("Error message on website
-    // page" for a blank square). Better to leave such a file alone.
-    guard lines.contains(where: { $0.text.unicodeScalars.filter(CharacterSet.letters.contains).count >= 3 })
-    else { return nil }
-    let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 40)
+    let hasWords = lines.contains {
+        $0.text.unicodeScalars.filter(CharacterSet.letters.contains).count >= 3
+    }
+    // The picture itself goes to the model only where the model can see (macOS 27).
+    var seen: CGImage?
+    #if compiler(>=6.4)
+    if #available(macOS 27.0, *), model.capabilities.contains(.vision) { seen = image }
+    #endif
+    // With no words in it, a shot can only be named from the picture. A model that
+    // cannot see has nothing to go on, and one that can will still call a blank
+    // square something. Such a file is left alone.
+    if !hasWords {
+        guard let seen, !looksBlank(seen) else { return nil }
+    }
 
     // The context is small, so if the text plus the picture does not fit, try again
     // with less text. The model service also fails now and then for no lasting
@@ -296,30 +415,42 @@ func modelTitle(_ image: CGImage?, _ lines: [Line]) async -> String? {
     var budgets = [1500, 600, 150]
     var retries = 2
     while let budget = budgets.first {
-        let text = textForModel(lines, budget: budget)
-        let session = LanguageModelSession(model: model, instructions: instructions)
+        let text = hasWords ? textForModel(lines, budget: budget) : ""
         do {
-            let reply: LanguageModelSession.Response<Named>
             #if compiler(>=6.4)
-            if #available(macOS 27.0, *), let image, model.capabilities.contains(.vision) {
-                reply = try await session.respond(generating: Named.self, options: options) {
-                    "Text read from the screenshot:"
-                    text
-                    "The screenshot:"
-                    Attachment(image)
+            if #available(macOS 27.0, *), let seen {
+                let session = LanguageModelSession(model: model, instructions: seeingInstructions)
+                // Room for the sentence that comes before the title.
+                let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 120)
+                let reply: LanguageModelSession.Response<Described>
+                if text.isEmpty {
+                    reply = try await session.respond(generating: Described.self, options: options) {
+                        "The screenshot:"
+                        Attachment(seen)
+                        "No text could be read from it."
+                    }
+                } else {
+                    reply = try await session.respond(generating: Described.self, options: options) {
+                        "The screenshot:"
+                        Attachment(seen)
+                        "Text read from the screenshot, which may include ads, menus and words printed on objects:"
+                        text
+                    }
                 }
-            } else {
-                guard !text.isEmpty else { return nil }
-                reply = try await session.respond(
-                    to: "Text read from the screenshot:\n\(text)",
-                    generating: Named.self, options: options)
+                // Nothing to name when the model itself finds the picture empty.
+                if !hasWords, reply.content.summary.range(
+                    of: "\\b(blank|empty)\\b", options: [.regularExpression, .caseInsensitive]) != nil {
+                    return nil
+                }
+                return tidy(await dropGuessedNames(reply.content.title, lines))
             }
-            #else
+            #endif
             guard !text.isEmpty else { return nil }
-            reply = try await session.respond(
+            let session = LanguageModelSession(model: model, instructions: instructions)
+            let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 40)
+            let reply = try await session.respond(
                 to: "Text read from the screenshot:\n\(text)",
                 generating: Named.self, options: options)
-            #endif
             return tidy(reply.content.title)
         } catch {
             FileHandle.standardError.write(Data("model: \(error)\n".prefix(400).utf8))

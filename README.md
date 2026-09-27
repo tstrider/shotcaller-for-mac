@@ -9,10 +9,10 @@ Shotcaller looks at each new screenshot, works out what it shows, and names the 
 Screen recordings too.
 
 ```
-Screenshot 2026-09-21 at 10.31.54 PM.png   ->   Discord chat about Spider-Man 2 2026-09-21.png
-Screenshot 2026-09-22 at 10.35.00 AM.png   ->   Reddit application creation form 2026-09-22.png
-Screenshot 2026-09-22 at 4.23.14 PM.png    ->   Frog meme about PC cleaning 2026-09-22.png
-Screen Recording 2026-09-21 at 10.23.10 PM.mov   ->   OBS tutorial 2026-09-21.mov
+Screenshot 2026-09-24 at 7.40.58 AM.png    ->   Magic The Gathering deck order confirmation 2026-09-24.png
+Screenshot 2026-09-27 at 7.13.43 AM.png    ->   Five books on tiered wooden bookend 2026-09-27.png
+Screenshot 2026-09-22 at 11.32.37 AM.png   ->   Stephanie Cole Wikipedia page 2026-09-22.png
+Screen Recording 2026-09-21 at 10.29.35 PM.mov   ->   Weather forecast Hoover temperature 2026-09-21.mov
 ```
 
 Install it once and forget it. No window, no menu bar icon, no account, no settings. Take a
@@ -75,10 +75,14 @@ picture.
 Text. Nothing is uploaded.
 
 **4. It works out what the screenshot is about.** Apple's on-device language model, the one
-behind Apple Intelligence, looks at the picture together with that text and writes a title of
-3 to 7 words: the app or site when it is plainly visible, then the subject. A Discord chat
-with a Settings window behind it becomes `Discord chat about Spider-Man 2`, not the biggest
-word on screen (`4 Energy`, from the Settings sidebar). Only the on-device model is ever used; Shotcaller never calls Apple's cloud one.
+behind Apple Intelligence, looks at the picture together with that text. It first says in one
+sentence what the whole shot shows, then writes a title of 2 to 7 words from that sentence.
+Deciding what the shot is before naming it stops a small model from grabbing whichever words
+stand out. A product photo of bookends, with a name printed on one book spine, becomes
+`Five books on tiered wooden bookend`, not `CARLY STEINBRUNN book display`. A list is named
+as a list, not after its first item. The model is told to name an app or site only when it is
+written on screen, and a well-known one it guesses anyway is dropped. Only the on-device
+model is ever used; Shotcaller never calls Apple's cloud one.
 
 The title is then cleaned up for the Finder: no slashes, colons, emoji or stray symbols, no
 file extensions read off the screen, no SHOUTING, and never longer than about 60 characters.
@@ -92,10 +96,10 @@ file extensions read off the screen, no SHOUTING, and never longer than about 60
   `Cancel`, `Done` never wins, so the macOS menu bar cannot become your filename.
 - **Junk is filtered.** Clocks, page numbers, prices, and lines that are mostly digits.
 
-**5. If nothing useful comes back, the file is left alone.** A shot with no readable words at
-all, such as a photo or an empty window, keeps the name macOS gave it, because the model would
-only invent one. Otherwise Shotcaller tries three times in all, ten minutes apart, before
-giving up. It would rather do nothing than give you a bad name.
+**5. If nothing useful comes back, the file is left alone.** A shot with no words in it, such
+as a photo, is named from the picture alone on macOS 27. A blank one keeps the name macOS gave
+it, because the model would only invent one. Otherwise Shotcaller tries three times in all,
+ten minutes apart, before giving up. It would rather do nothing than give you a bad name.
 
 Recordings are named from a frame about 30% of the way in, never later than 20 seconds.
 
