@@ -11,9 +11,9 @@
     <key>CFBundleExecutable</key>
     <string>Shotcaller</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>2.1</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>2.1</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -25,10 +25,10 @@
 
     <!-- Shown in the macOS box that asks whether Shotcaller may read the folder. -->
     <key>NSDesktopFolderUsageDescription</key>
-    <string>Shotcaller renames new screenshots after the text inside them.</string>
+    <string>Shotcaller renames new screenshots after what they show.</string>
     <key>NSDocumentsFolderUsageDescription</key>
-    <string>Shotcaller renames new screenshots after the text inside them.</string>
+    <string>Shotcaller renames new screenshots after what they show.</string>
     <key>NSDownloadsFolderUsageDescription</key>
-    <string>Shotcaller renames new screenshots after the text inside them.</string>
+    <string>Shotcaller renames new screenshots after what they show.</string>
 </dict>
 </plist>

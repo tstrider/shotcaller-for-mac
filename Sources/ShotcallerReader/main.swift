@@ -10,7 +10,8 @@
 //
 // How the title is found:
 //
-// 1. Apple's text recogniser reads every line in the picture.
+// 1. Apple's text recogniser reads every line in the picture, in the languages this
+//    Mac is set to.
 // 2. If Apple Intelligence is on, Apple's on-device language model looks at the
 //    picture itself together with that text, says in a sentence what the whole shot
 //    shows, and then writes a title from that ("Discord chat about Destiny lore").
@@ -42,11 +43,31 @@ struct Line {
     var y: Double { Double(box.midY) }
 }
 
+/// The languages to read: the ones this Mac is set to, where the recogniser knows them.
+///
+/// The recogniser can guess the language instead, but the first time it guesses one it
+/// has not met, it spends a minute or two building a model for it, and a screenshot
+/// full of names and jargon makes it guess wrongly often. A fixed list means that
+/// building happens once, during the warm-up, and never while a real shot waits.
+func readingLanguages(_ request: VNRecognizeTextRequest) -> [String] {
+    let known = (try? request.supportedRecognitionLanguages()) ?? []
+    var chosen: [String] = []
+    for wanted in Locale.preferredLanguages {
+        // "en-US" is known as it stands, "zh-Hans-CN" as "zh-Hans", "de-AT" as "de-DE".
+        let language = wanted.split(separator: "-").first
+        let match = known.first { $0 == wanted || wanted.hasPrefix($0 + "-") }
+            ?? known.first { $0.split(separator: "-").first == language }
+        if let match, !chosen.contains(match) { chosen.append(match) }
+    }
+    return chosen.isEmpty ? ["en-US"] : Array(chosen.prefix(3))
+}
+
 func recognise(_ image: CGImage) -> [Line] {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = true
-    request.automaticallyDetectsLanguage = true
+    request.automaticallyDetectsLanguage = false
+    request.recognitionLanguages = readingLanguages(request)
     do {
         try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
     } catch {
@@ -494,7 +515,7 @@ func frame(ofVideo url: URL) async -> CGImage? {
 
 func load(_ path: String) async -> CGImage? {
     let url = URL(fileURLWithPath: path)
-    if ["mov", "mp4", "m4v"].contains(url.pathExtension.lowercased()) {
+    if ["mov", "mp4"].contains(url.pathExtension.lowercased()) {
         return await frame(ofVideo: url)
     }
     guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
@@ -513,9 +534,10 @@ func load(_ path: String) async -> CGImage? {
 
 // MARK: - run
 
-// The very first read after a login, or after a long idle, spends up to a minute
-// loading Apple's models. Every one after that is quick. With --warmup the reader
-// pays that cost on a throwaway image, so a real screenshot never waits.
+// The first read after an install or a macOS update spends a minute or more building
+// Apple's text models for this Mac, and the first after a login loads them. Every one
+// after that is quick. With --warmup the reader pays that cost on a throwaway image,
+// so a real screenshot never waits for it.
 
 let args = Array(CommandLine.arguments.dropFirst())
 let useModel = !args.contains("--no-model")

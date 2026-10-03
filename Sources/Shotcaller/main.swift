@@ -13,10 +13,11 @@
 //    own identifier is allowed to ask, so the usual access box appears instead.
 //
 // 2. The looking happens in a separate helper process with a time limit. Apple's
-//    models take up to a minute to load the first time after a login and are fast
-//    after that, so Shotcaller loads them on a throwaway image at startup. Keeping
-//    the reader separate means a slow or stuck read can never stop the watcher, and
-//    the reader never needs folder permission of its own.
+//    models take a minute or more to get ready the first time after an install, a
+//    macOS update or a login, and are fast after that, so Shotcaller readies them on
+//    a throwaway image at startup. Keeping the reader separate means a slow or stuck
+//    read can never stop the watcher, and the reader never needs folder permission
+//    of its own.
 //
 // Shotcaller never deletes anything. A file it cannot find a sensible title for
 // keeps the name macOS gave it.
@@ -27,7 +28,10 @@ import Foundation
 
 let fm = FileManager.default
 let home = fm.homeDirectoryForCurrentUser
-let supportDir = home.appendingPathComponent("Library/Application Support/Shotcaller")
+// A test copy can be pointed somewhere else, to leave the real settings and log alone.
+let supportDir = ProcessInfo.processInfo.environment["SHOTCALLER_SUPPORT"].map {
+    URL(fileURLWithPath: $0)
+} ?? home.appendingPathComponent("Library/Application Support/Shotcaller")
 let logFile = supportDir.appendingPathComponent("shotcaller.log")
 let configFile = supportDir.appendingPathComponent("config.json")
 // Next to this executable, which is where install.sh puts it.
@@ -79,6 +83,10 @@ struct Config: Codable, Equatable {
 
     init() {}
 
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case watchFolder, keepDate, useAppleIntelligence, renameRecordings, prefixes, recordingPrefixes
+    }
+
     // Every key is optional, so a config.json from an older version, or one with a
     // key deleted by hand, still loads and keeps the settings that are there.
     init(from decoder: Decoder) throws {
@@ -105,26 +113,26 @@ var configBroken = false
 /// Reads config.json when it has changed since last time. A file with a mistake in
 /// it is never overwritten: the last good settings stay in use and the log says why.
 func loadConfig(_ current: Config) -> Config {
-    guard let attrs = try? fm.attributesOfItem(atPath: configFile.path),
-          let data = try? Data(contentsOf: configFile) else {
+    guard fm.fileExists(atPath: configFile.path) else {
         save(Config())
         return Config()
     }
-    let stamp = attrs[.modificationDate] as? Date
-    if stamp == configStamp { return current }
+    let stamp = (try? fm.attributesOfItem(atPath: configFile.path))?[.modificationDate] as? Date
+    if stamp != nil, stamp == configStamp { return current }
     configStamp = stamp
     do {
+        let data = try Data(contentsOf: configFile)
         let parsed = try JSONDecoder().decode(Config.self, from: data)
         if configBroken { log("CONFIG config.json reads fine again"); configBroken = false }
         // Add any settings this version knows about that the file does not show yet.
         if let keys = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-           keys.count < 6 {
+           Config.CodingKeys.allCases.contains(where: { keys[$0.rawValue] == nil }) {
             save(parsed)
         }
         return parsed
     } catch {
         if !configBroken {
-            log("CONFIG config.json has a mistake in it, so the last good settings stay in use")
+            log("CONFIG config.json cannot be read or has a mistake in it, so the last good settings stay in use")
             configBroken = true
         }
         return current
@@ -306,8 +314,9 @@ func watchFolderForChanges() {
         if !source.data.intersection([.rename, .delete]).isEmpty {
             work.asyncAfter(deadline: .now() + 2) { watchFolderForChanges() }
         }
-        // Give the writer a moment to finish before looking.
-        schedulePass(after: 0.7)
+        // Only long enough for a burst of events to settle. A file that is still
+        // being written is spotted in the pass itself, and waits there.
+        schedulePass(after: 0.2)
     }
     source.setCancelHandler { close(fd) }
     source.resume()
@@ -335,6 +344,22 @@ func isFresh(_ name: String) -> Bool {
         return config.recordingPrefixes.contains { lower.hasPrefix($0) }
     }
     return false
+}
+
+/// True when a picture is plainly all there: a PNG or a JPEG always closes with the
+/// same few bytes. macOS moves a finished screenshot into the folder in one piece, so
+/// this lets it be read at once, without first waiting to see whether it still grows.
+func looksFinished(_ url: URL, size: Int) -> Bool {
+    let endings: [String: [UInt8]] = [
+        "png": [0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82],
+        "jpg": [0xFF, 0xD9], "jpeg": [0xFF, 0xD9]
+    ]
+    guard let ending = endings[url.pathExtension.lowercased()], size > ending.count,
+          let handle = try? FileHandle(forReadingFrom: url) else { return false }
+    defer { try? handle.close() }
+    guard (try? handle.seek(toOffset: UInt64(size - ending.count))) != nil,
+          let tail = try? handle.read(upToCount: ending.count) else { return false }
+    return Array(tail) == ending
 }
 
 func pass() {
@@ -392,16 +417,18 @@ func pass() {
               attrs[.type] as? FileAttributeType == .typeRegular,
               let size = attrs[.size] as? Int, size > 1000 else { continue }
 
-        // A file lands on disk before it is finished being written. Only act once its
-        // size has held steady across two looks and it has sat untouched for a moment,
-        // longer for a recording. macOS itself writes screenshots out of sight and
-        // moves them in whole, but a copied or synced file arrives a piece at a time.
+        // A file can land on disk before it is finished being written. macOS itself
+        // writes screenshots out of sight and moves them in whole, but a copied or
+        // synced file arrives a piece at a time. A picture that plainly ends where it
+        // should is read at once. Anything else waits until its size has held steady
+        // across two looks and it has sat untouched for a moment, longer for a recording.
         let isVideo = videoTypes.contains((name as NSString).pathExtension.lowercased())
         let modified = attrs[.modificationDate] as? Date ?? now
         // A date in the future (a synced file from a Mac whose clock runs ahead)
         // must not keep the file waiting forever.
         let age = now.timeIntervalSince(modified)
-        if sizeSeen[name] != size || (age >= 0 && age < (isVideo ? 5 : 2)) {
+        let settled = sizeSeen[name] == size && !(age >= 0 && age < (isVideo ? 5 : 2))
+        if !settled, !looksFinished(url, size: size) {
             sizeSeen[name] = size
             lookAgainSoon = true
             continue
@@ -481,7 +508,7 @@ try? fm.createDirectory(at: supportDir, withIntermediateDirectories: true,
 // Clear out copies left behind by a Shotcaller that was stopped halfway through a
 // read. Only folders whose process is gone; another running copy keeps its own.
 for leftover in (try? fm.contentsOfDirectory(atPath: scratchRoot.path)) ?? []
-where leftover.hasPrefix("com.strider.shotcaller") || leftover.hasPrefix("shotcaller-") {
+where leftover.hasPrefix("com.strider.shotcaller-") || leftover.hasPrefix("shotcaller-") {
     // Version 1 left single files named shotcaller-<id> behind.
     let pid = Int32(leftover.split(separator: "-").last ?? "") ?? 0
     if pid <= 0 || kill(pid, 0) != 0 {
@@ -519,10 +546,10 @@ work.async {
 let warmArgs = config.useAppleIntelligence ? ["--warmup"] : ["--warmup", "--no-model"]
 DispatchQueue.global(qos: .utility).async {
     let began = Date()
-    if runReader(warmArgs, limit: 300) == nil {
-        log("SLOW   Apple's models are taking a long time to load")
-    } else {
-        log("READY  models loaded in \(Int(Date().timeIntervalSince(began)))s")
+    switch runReader(warmArgs, limit: 300)?.status {
+    case nil: log("SLOW   Apple's models are taking a long time to get ready")
+    case 0: log("READY  models ready in \(Int(Date().timeIntervalSince(began)))s")
+    default: log("ERROR  the reader could not warm up Apple's models")
     }
 }
 

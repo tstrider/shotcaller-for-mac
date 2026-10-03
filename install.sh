@@ -87,14 +87,22 @@ launchctl bootstrap "gui/$(id -u)" "$AGENT" 2>/dev/null || \
 sleep 3
 
 # 5. Say what happened.
-WHERE=$(defaults read com.apple.screencapture location 2>/dev/null || echo "$HOME/Desktop")
+if ! pgrep -qf "$APP/Contents/MacOS/Shotcaller"; then
+    printf '\nInstalled, but Shotcaller did not start.\n\n'
+    printf 'Run ./install.sh once more. If it still does not start, restart the Mac.\n\n'
+    exit 1
+fi
+# Shotcaller's own log says which folder it is really watching.
+WHERE=$(grep 'START  watching ' "$SUPPORT/shotcaller.log" 2>/dev/null | tail -1 | sed 's/.*START  watching //' || true)
+[ -n "$WHERE" ] || WHERE=$(defaults read com.apple.screencapture location 2>/dev/null || echo "$HOME/Desktop")
 printf '\nInstalled.\n\n'
 say "Watching:  ${WHERE/#$HOME/~}"
 say "Log:       ~/Library/Application Support/Shotcaller/shotcaller.log"
 say "Settings:  ~/Library/Application Support/Shotcaller/config.json"
 printf '\n'
 printf 'Take a screenshot. Within a few seconds the file renames itself after\n'
-printf 'whatever the picture is about.\n\n'
+printf 'whatever the picture is about. Right after an install or a macOS update,\n'
+printf 'give it a minute or two first, while Apple'"'"'s models get ready.\n\n'
 printf 'The best names come from Apple Intelligence, which runs on your Mac. If it is\n'
 printf 'off, Shotcaller names each file after its biggest line of text instead. Turn it\n'
 printf 'on in System Settings, Apple Intelligence and Siri.\n\n'

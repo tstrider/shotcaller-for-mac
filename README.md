@@ -67,12 +67,12 @@ read every line before you run it.
 to save screenshots and watches that. Change the location later and it follows, within thirty
 seconds, with no restart.
 
-**2. It waits until the file is finished.** A screenshot appears on disk before it is fully
-written. Shotcaller only acts once the file size has held steady, so it never reads half a
-picture.
+**2. It never reads half a picture.** A file can appear on disk before it is fully written.
+A PNG or JPEG that plainly ends where it should is read at once, which covers every screenshot
+macOS takes. Anything else waits until its size has held steady.
 
 **3. It reads the text.** Apple's own on-device text recognition, the same engine behind Live
-Text. Nothing is uploaded.
+Text, in the languages your Mac is set to. Nothing is uploaded.
 
 **4. It works out what the screenshot is about.** Apple's on-device language model, the one
 behind Apple Intelligence, looks at the picture together with that text. It first says in one
@@ -105,9 +105,9 @@ Recordings are named from a frame about 30% of the way in, never later than 20 s
 
 ---
 
-## Two hard-won details
+## Three hard-won details
 
-If you are building something similar, these two cost real time to find.
+If you are building something similar, these three cost real time to find.
 
 **A background script cannot read your Desktop, Documents or Downloads, and macOS will not
 tell you.** An unbundled script gets denied silently: no prompt, no error, and a directory
@@ -115,10 +115,17 @@ listing that simply comes back empty. Only a proper app bundle with its own iden
 allowed to ask for access. That is why Shotcaller ships as a `.app` rather than a shell script
 and a launch agent.
 
-**Apple's models take about a minute to load, once.** The first read after a login is slow
-enough that it looks like a hang, and every one after it takes a few seconds, because the
-loaded models are shared across the whole system. Shotcaller loads it at startup on a
-throwaway image, so the first screenshot you actually care about is never the one that waits.
+**Apple's models take a minute or two to get ready, once.** The first read after an install,
+a macOS update or a login is slow enough that it looks like a hang, and every one after it
+takes a few seconds. Shotcaller does that first read at startup on a throwaway image, so the
+first screenshot you actually care about is never the one that waits.
+
+**Never let the text recogniser guess the language.** The first time Vision meets a language
+it builds a model for it, once per app and per macOS build, and that takes a minute or two.
+With automatic language detection on, a screenshot full of names and jargon gets guessed as
+some new language now and then, and that one screenshot then stalls for the whole build.
+Shotcaller gives the recogniser the Mac's own languages instead. The build happens once,
+during the warm-up, and every read after that takes well under a second.
 
 The reading also runs in a separate short-lived process with a time limit. That keeps
 a slow or stuck read from stalling the watcher, and means the reader never needs folder
